@@ -1,0 +1,11 @@
+C:\Users\delse\DECENTRALIZED-QUEUE-MANAGEMENT-APP\dqms-mvp\src\main\java\com\dqms\app\Main.java
+C:\Users\delse\DECENTRALIZED-QUEUE-MANAGEMENT-APP\dqms-mvp\src\main\java\com\dqms\db\DatabaseManager.java
+C:\Users\delse\DECENTRALIZED-QUEUE-MANAGEMENT-APP\dqms-mvp\src\main\java\com\dqms\model\Message.java
+C:\Users\delse\DECENTRALIZED-QUEUE-MANAGEMENT-APP\dqms-mvp\src\main\java\com\dqms\model\NodeInfo.java
+C:\Users\delse\DECENTRALIZED-QUEUE-MANAGEMENT-APP\dqms-mvp\src\main\java\com\dqms\model\Ticket.java
+C:\Users\delse\DECENTRALIZED-QUEUE-MANAGEMENT-APP\dqms-mvp\src\main\java\com\dqms\network\MessageHandler.java
+C:\Users\delse\DECENTRALIZED-QUEUE-MANAGEMENT-APP\dqms-mvp\src\main\java\com\dqms\network\TCPClient.java
+C:\Users\delse\DECENTRALIZED-QUEUE-MANAGEMENT-APP\dqms-mvp\src\main\java\com\dqms\network\TCPServer.java
+C:\Users\delse\DECENTRALIZED-QUEUE-MANAGEMENT-APP\dqms-mvp\src\main\java\com\dqms\network\UDPDiscoveryService.java
+C:\Users\delse\DECENTRALIZED-QUEUE-MANAGEMENT-APP\dqms-mvp\src\main\java\com\dqms\queue\QueueManager.java
+C:\Users\delse\DECENTRALIZED-QUEUE-MANAGEMENT-APP\dqms-mvp\src\main\java\com\dqms\ui\MainController.java

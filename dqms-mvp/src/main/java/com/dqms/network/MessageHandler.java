@@ -1,0 +1,89 @@
+package com.dqms.network;
+
+import com.dqms.model.Message;
+import com.dqms.model.Ticket;
+import com.dqms.queue.QueueManager;
+
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.logging.Logger;
+
+/**
+ * Handles a single incoming TCP connection from a peer.
+ * Reads one Message, routes it to QueueManager, then closes the connection.
+ *
+ * Routing:
+ *   NEW_TICKET    → queueManager.receiveTicket(ticket)
+ *   UPDATE_STATUS → queueManager.receiveStatusUpdate(ticketId, status)
+ *   SYNC_REQUEST  → reply with SYNC_RESPONSE carrying relevant tickets
+ *   SYNC_RESPONSE → queueManager.applySyncResponse(ticketList)
+ */
+public class MessageHandler implements Runnable {
+
+    private static final Logger LOG = Logger.getLogger(MessageHandler.class.getName());
+
+    private final Socket socket;
+    private final QueueManager queueManager;
+
+    public MessageHandler(Socket socket, QueueManager queueManager) {
+        this.socket = socket;
+        this.queueManager = queueManager;
+    }
+
+    @Override
+    public void run() {
+        try (socket;
+             ObjectInputStream in  = new ObjectInputStream(socket.getInputStream());
+             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
+
+            Message msg = (Message) in.readObject();
+            String senderId = msg.getSenderNodeId();
+            LOG.info("Received " + msg.getType() + " from " + senderId);
+
+            switch (msg.getType()) {
+
+                case NEW_TICKET ->
+                        queueManager.receiveTicket(msg.getTicket());
+
+                case UPDATE_STATUS ->
+                        queueManager.receiveStatusUpdate(msg.getTicketId(), msg.getNewStatus());
+
+                case SYNC_REQUEST -> {
+                    // Privacy Filtering for Sync:
+                    // Only send tickets that the requester is allowed to see.
+                    List<Ticket> all = queueManager.getUnfilteredTickets(); 
+                    List<Ticket> filtered = new ArrayList<>();
+
+                    // If requester is Admin (NODE_001), send everything we have
+                    if ("NODE_001".equalsIgnoreCase(senderId)) {
+                        filtered = all; 
+                    } else {
+                        // Otherwise, send only tickets belonging to that node
+                        for (Ticket t : all) {
+                            if (t.getOriginNodeId().equalsIgnoreCase(senderId)) {
+                                filtered.add(t);
+                            }
+                        }
+                    }
+
+                    Message response = Message.syncResponse(
+                            queueManager.getNodeId(),
+                            filtered
+                    );
+                    out.writeObject(response);
+                    out.flush();
+                    LOG.info("Sent SYNC_RESPONSE with " + filtered.size() + " tickets to " + senderId);
+                }
+
+                case SYNC_RESPONSE ->
+                        queueManager.applySyncResponse(msg.getTicketList());
+            }
+
+        } catch (Exception e) {
+            LOG.warning("MessageHandler error: " + e.getMessage());
+        }
+    }
+}
