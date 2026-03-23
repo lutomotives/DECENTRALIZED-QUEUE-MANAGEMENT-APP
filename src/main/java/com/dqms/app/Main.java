@@ -28,13 +28,16 @@ public class Main extends Application {
 
     @Override
     public void start(Stage stage) throws Exception {
+        // Parse args (JavaFX passes them via getParameters())
         var params = getParameters().getRaw();
         tcpPort = params.size() > 0 ? Integer.parseInt(params.get(0)) : 5001;
         nodeId  = params.size() > 1 ? params.get(1) : "NODE_001";
-        
-        if (params.size() > 2) {
-            isAdmin = "ADMIN".equalsIgnoreCase(params.get(2));
-        } else {
+
+        // Check if "ADMIN" was passed anywhere in the arguments
+        isAdmin = params.stream().anyMatch(p -> "ADMIN".equalsIgnoreCase(p));
+
+        // If not explicitly set via args, fallback to checking if it's the default NODE_001
+        if (!isAdmin && params.isEmpty()) {
             isAdmin = "NODE_001".equalsIgnoreCase(nodeId);
         }
 
