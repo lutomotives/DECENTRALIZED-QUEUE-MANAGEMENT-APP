@@ -36,12 +36,12 @@
 
             <Label text="Registration Number" styleClass="field-label"/>
             <TextField fx:id="regNumberField"
-                       promptText="e.g. EB1/66818/23"
+                       promptText="e.g. EB1/12345/23"
                        styleClass="input-field"/>
 
             <Label text="Student Name" styleClass="field-label"/>
             <TextField fx:id="studentNameField"
-                       promptText="e.g. William Otieno"
+                       promptText="e.g. John Doe"
                        styleClass="input-field"/>
 
             <Button fx:id="joinButton"
