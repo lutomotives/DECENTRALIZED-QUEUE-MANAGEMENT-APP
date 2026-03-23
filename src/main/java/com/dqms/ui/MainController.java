@@ -202,11 +202,8 @@ public class MainController {
     private boolean canClear(Ticket ticket) {
         if (ticket == null || !"WAITING".equals(ticket.getStatus())) return false;
 
-        // Admin (NODE_001) can clear ANY ticket
-        if (queueManager.isAdmin()) return true;
-
-        // Regular nodes can only clear their OWN tickets
-        return ticket.getOriginNodeId().equalsIgnoreCase(queueManager.getNodeId());
+        // ONLY Admin (NODE_001) can clear ANY ticket from the queue
+        return queueManager.isAdmin();
     }
 
     private void refreshPeerStatus() {

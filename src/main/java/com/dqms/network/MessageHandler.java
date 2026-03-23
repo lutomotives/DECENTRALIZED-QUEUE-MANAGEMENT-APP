@@ -52,22 +52,9 @@ public class MessageHandler implements Runnable {
                         queueManager.receiveStatusUpdate(msg.getTicketId(), msg.getNewStatus());
 
                 case SYNC_REQUEST -> {
-                    // Privacy Filtering for Sync:
-                    // Only send tickets that the requester is allowed to see.
-                    List<Ticket> all = queueManager.getUnfilteredTickets(); 
-                    List<Ticket> filtered = new ArrayList<>();
-
-                    // If requester is Admin (NODE_001), send everything we have
-                    if ("NODE_001".equalsIgnoreCase(senderId)) {
-                        filtered = all; 
-                    } else {
-                        // Otherwise, send only tickets belonging to that node
-                        for (Ticket t : all) {
-                            if (t.getOriginNodeId().equalsIgnoreCase(senderId)) {
-                                filtered.add(t);
-                            }
-                        }
-                    }
+                    // All nodes are now allowed to see all tickets.
+                    // Send everything we have to ensure full replication.
+                    List<Ticket> filtered = queueManager.getUnfilteredTickets();
 
                     Message response = Message.syncResponse(
                             queueManager.getNodeId(),

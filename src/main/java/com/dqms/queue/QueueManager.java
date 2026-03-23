@@ -14,10 +14,10 @@ import java.util.logging.Logger;
  * Central coordinator for all queue operations.
  *
  * Responsibilities:
- *   - Maintain in-memory PriorityBlockingQueue (thread-safe, FIFO-ordered)
- *   - Persist every change to local SQLite via DatabaseManager
- *   - Broadcast changes to all known peers via TCPClient
- *   - Handle incoming replicated events from peers
+ * - Maintain in-memory PriorityBlockingQueue (thread-safe, FIFO-ordered)
+ * - Persist every change to local SQLite via DatabaseManager
+ * - Broadcast changes to all known peers via TCPClient
+ * - Handle incoming replicated events from peers
  *
  * Thread safety: all public mutating methods are synchronized on `this`
  * to prevent race conditions when network threads and UI threads both write.
@@ -38,11 +38,11 @@ public class QueueManager {
     private Runnable onQueueChanged;
 
     public QueueManager(String nodeId, DatabaseManager db, TCPClient client,
-                        Map<String, NodeInfo> peers) {
+            Map<String, NodeInfo> peers) {
         this.nodeId = nodeId;
-        this.db     = db;
+        this.db = db;
         this.client = client;
-        this.peers  = peers;
+        this.peers = peers;
     }
 
     public synchronized void setOnQueueChanged(Runnable callback) {
@@ -83,12 +83,9 @@ public class QueueManager {
         queue.add(ticket);
         db.insertTicket(ticket);
 
-        // Targeted Messaging:
-        // If not admin, send to NODE_001. If admin, don't broadcast.
+        // Broadcast new ticket to ALL peers so everyone can see it in real-time
         Message msg = Message.newTicket(nodeId, ticket);
-        if (!isAdmin()) {
-            sendToNode("NODE_001", msg);
-        }
+        broadcast(msg);
 
         LOG.info("Created ticket: " + ticket);
         notifyUIChanged();
@@ -96,16 +93,18 @@ public class QueueManager {
     }
 
     /**
-     * Admin officer clears a student from THIS node's dashboard.
-     * Updates locally and sends update to creator and admin.
+     * Admin officer clears a student from the queue.
+     * ONLY NODE_001 is authorized to clear students.
      */
     public synchronized void clearStudent(String ticketId) {
         Ticket ticket = findTicket(ticketId);
-        if (ticket == null) return;
+        if (ticket == null)
+            return;
 
-        // Restriction check
-        if (!isAdmin() && !ticket.getOriginNodeId().equalsIgnoreCase(nodeId)) {
-            LOG.warning("Unauthorized clear attempt by " + nodeId + " on ticket from " + ticket.getOriginNodeId());
+        // AUTHENTICATION: Only Admin (NODE_001) can clear a person from the queue
+        if (!isAdmin()) {
+            LOG.warning("Unauthorized clear attempt by " + nodeId
+                    + " on ticket. Only NODE_001 (Admin) can clear students.");
             return;
         }
 
@@ -113,17 +112,11 @@ public class QueueManager {
         ticket.setStatus("CLEARED");
         db.updateStatus(ticketId, "CLEARED");
 
-        // Targeted messaging for update
+        // Broadcast status update to ALL peers so everyone sees the cleared status
         Message msg = Message.updateStatus(nodeId, ticketId, "CLEARED");
-        if (isAdmin()) {
-            // Admin clears someone's ticket, must notify the creator
-            sendToNode(ticket.getOriginNodeId(), msg);
-        } else {
-            // Regular node clears its own ticket, notify Admin
-            sendToNode("NODE_001", msg);
-        }
+        broadcast(msg);
 
-        LOG.info("Cleared ticket: " + ticketId);
+        LOG.info("Admin (" + nodeId + ") cleared ticket: " + ticketId);
         notifyUIChanged();
     }
 
@@ -154,7 +147,8 @@ public class QueueManager {
             LOG.info("Updated ticket " + ticketId + " to " + newStatus);
             notifyUIChanged();
         } else {
-            // If we didn't have it (maybe sync issue?), just update DB and it'll show up later if needed
+            // If we didn't have it (maybe sync issue?), just update DB and it'll show up
+            // later if needed
             db.updateStatus(ticketId, newStatus);
             LOG.info("Status update for unknown ticket " + ticketId + " → DB updated.");
         }
@@ -208,18 +202,13 @@ public class QueueManager {
 
     /**
      * Returns all tickets VISIBLE to this node, sorted by status and FIFO.
+     * All nodes now see all tickets.
      */
     public List<Ticket> getAllTicketsAsList() {
         List<Ticket> list = new ArrayList<>(queue);
-        
-        // PRIVACY FILTER:
-        // Admin sees everything. Regular nodes see only their own.
-        if (!isAdmin()) {
-            list.removeIf(t -> !t.getOriginNodeId().equalsIgnoreCase(nodeId));
-        }
 
         list.sort(Comparator.comparingInt((Ticket t) -> t.getStatus().equals("WAITING") ? 0 : 1)
-                           .thenComparing(Ticket::compareTo));
+                .thenComparing(Ticket::compareTo));
         return list;
     }
 
@@ -232,12 +221,21 @@ public class QueueManager {
                 .toList();
     }
 
-    public String getNodeId()                   { return nodeId; }
-    public Map<String, NodeInfo> getPeers()     { return Collections.unmodifiableMap(peers); }
-    public int getPeerCount()                   { return peers.size(); }
+    public String getNodeId() {
+        return nodeId;
+    }
+
+    public Map<String, NodeInfo> getPeers() {
+        return Collections.unmodifiableMap(peers);
+    }
+
+    public int getPeerCount() {
+        return peers.size();
+    }
 
     private void notifyUIChanged() {
-        if (onQueueChanged != null) onQueueChanged.run();
+        if (onQueueChanged != null)
+            onQueueChanged.run();
     }
 
     private Ticket findTicket(String ticketId) {
@@ -248,10 +246,18 @@ public class QueueManager {
     }
 
     /**
+     * Broadcasts a message to all known peers.
+     */
+    private void broadcast(Message msg) {
+        client.broadcast(peers.values(), msg);
+    }
+
+    /**
      * Helper to send a message to a specific node by ID if found in peers.
      */
     private void sendToNode(String targetNodeId, Message msg) {
-        if (targetNodeId.equalsIgnoreCase(nodeId)) return;
+        if (targetNodeId.equalsIgnoreCase(nodeId))
+            return;
         NodeInfo target = peers.get(targetNodeId);
         if (target != null) {
             client.send(target, msg);
