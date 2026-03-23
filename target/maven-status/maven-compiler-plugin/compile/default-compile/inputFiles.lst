@@ -1,0 +1,11 @@
+/mnt/c/Users/user/Desktop/CHUKA_UNI/THIRD YEAR/Y3S2/dqms-mvp/dqms-mvp/src/main/java/com/dqms/app/Main.java
+/mnt/c/Users/user/Desktop/CHUKA_UNI/THIRD YEAR/Y3S2/dqms-mvp/dqms-mvp/src/main/java/com/dqms/ui/MainController.java
+/mnt/c/Users/user/Desktop/CHUKA_UNI/THIRD YEAR/Y3S2/dqms-mvp/dqms-mvp/src/main/java/com/dqms/network/MessageHandler.java
+/mnt/c/Users/user/Desktop/CHUKA_UNI/THIRD YEAR/Y3S2/dqms-mvp/dqms-mvp/src/main/java/com/dqms/db/DatabaseManager.java
+/mnt/c/Users/user/Desktop/CHUKA_UNI/THIRD YEAR/Y3S2/dqms-mvp/dqms-mvp/src/main/java/com/dqms/model/Message.java
+/mnt/c/Users/user/Desktop/CHUKA_UNI/THIRD YEAR/Y3S2/dqms-mvp/dqms-mvp/src/main/java/com/dqms/model/NodeInfo.java
+/mnt/c/Users/user/Desktop/CHUKA_UNI/THIRD YEAR/Y3S2/dqms-mvp/dqms-mvp/src/main/java/com/dqms/network/UDPDiscoveryService.java
+/mnt/c/Users/user/Desktop/CHUKA_UNI/THIRD YEAR/Y3S2/dqms-mvp/dqms-mvp/src/main/java/com/dqms/network/TCPServer.java
+/mnt/c/Users/user/Desktop/CHUKA_UNI/THIRD YEAR/Y3S2/dqms-mvp/dqms-mvp/src/main/java/com/dqms/model/Ticket.java
+/mnt/c/Users/user/Desktop/CHUKA_UNI/THIRD YEAR/Y3S2/dqms-mvp/dqms-mvp/src/main/java/com/dqms/queue/QueueManager.java
+/mnt/c/Users/user/Desktop/CHUKA_UNI/THIRD YEAR/Y3S2/dqms-mvp/dqms-mvp/src/main/java/com/dqms/network/TCPClient.java

@@ -1,0 +1,46 @@
+[[1;34mINFO[m] Scanning for projects...
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m-------------------------< [0;36mcom.dqms:dqms-mvp[0;1m >--------------------------[m
+[[1;34mINFO[m] [1mBuilding dqms-mvp 1.0-SNAPSHOT[m
+[[1;34mINFO[m] [1m--------------------------------[ jar ]---------------------------------[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m>>> [0;32mjavafx-maven-plugin:0.0.8:run[m [1m(default-cli)[0;1m > [0;1mprocess-classes[m @ [36mdqms-mvp[0;1m >>>[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:2.6:resources[m [1m(default-resources)[m @ [36mdqms-mvp[0;1m ---[m
+[[1;34mINFO[m] Using 'UTF-8' encoding to copy filtered resources.
+[[1;34mINFO[m] Copying 2 resources
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.1:compile[m [1m(default-compile)[m @ [36mdqms-mvp[0;1m ---[m
+[[1;34mINFO[m] Nothing to compile - all classes are up to date
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m<<< [0;32mjavafx-maven-plugin:0.0.8:run[m [1m(default-cli)[0;1m < [0;1mprocess-classes[m @ [36mdqms-mvp[0;1m <<<[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mjavafx-maven-plugin:0.0.8:run[m [1m(default-cli)[m @ [36mdqms-mvp[0;1m ---[m
+Mar 23, 2026 4:26:02 PM com.dqms.app.Main start
+INFO: === Starting DQMS Node: NODE_002 on port 5002 ===
+SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+Mar 23, 2026 4:26:04 PM com.dqms.db.DatabaseManager <init>
+INFO: Connected to SQLite: dqms_NODE_002.db
+Mar 23, 2026 4:26:04 PM com.dqms.app.Main start
+INFO: Loading local persisted state...
+Mar 23, 2026 4:26:04 PM com.dqms.queue.QueueManager loadFromDatabase
+INFO: Loaded 9 tickets from local DB
+Mar 23, 2026 4:26:04 PM com.dqms.network.TCPServer run
+INFO: TCPServer listening on port 5002
+Mar 23, 2026 4:26:04 PM com.dqms.app.Main start
+INFO: Waiting 3s for peer discovery...
+Mar 23, 2026 4:26:04 PM com.dqms.network.UDPDiscoveryService run
+INFO: Starting UDP Discovery on 239.0.0.1:4446
+Mar 23, 2026 4:26:04 PM com.dqms.network.UDPDiscoveryService run
+INFO: Joined multicast group: 239.0.0.1
+Mar 23, 2026 4:26:15 PM com.dqms.app.Main start
+INFO: UI launched for NODE_002
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] [1;32mBUILD SUCCESS[m
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] Total time:  58.298 s
+[[1;34mINFO[m] Finished at: 2026-03-23T16:26:45+03:00
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m

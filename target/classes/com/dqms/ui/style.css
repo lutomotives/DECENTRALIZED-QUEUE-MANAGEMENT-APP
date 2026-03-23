@@ -1,0 +1,199 @@
+/* ── Base ────────────────────────────────────────────────────────────────── */
+.root-pane {
+    -fx-background-color: #F0F4F8;
+    -fx-font-family: "Segoe UI", "Arial", sans-serif;
+}
+
+/* ── Top Bar ─────────────────────────────────────────────────────────────── */
+.top-bar {
+    -fx-background-color: #1F4E79;
+}
+
+.logo-text {
+    -fx-text-fill: white;
+    -fx-font-size: 22px;
+    -fx-font-weight: bold;
+}
+
+.top-subtitle {
+    -fx-text-fill: #90CAF9;
+    -fx-font-size: 13px;
+}
+
+.node-badge {
+    -fx-background-color: #2E74B5;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-font-size: 13px;
+    -fx-padding: 4 10 4 10;
+    -fx-background-radius: 4;
+}
+
+.status-label {
+    -fx-text-fill: #90CAF9;
+    -fx-font-size: 11px;
+}
+
+/* ── Side Panel ──────────────────────────────────────────────────────────── */
+.side-panel {
+    -fx-background-color: white;
+    -fx-border-color: #DDE3EA;
+    -fx-border-width: 0 1 0 0;
+}
+
+.panel-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1F4E79;
+}
+
+.field-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: #555;
+}
+
+.input-field {
+    -fx-background-color: #F5F8FA;
+    -fx-border-color: #C5D0DC;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 7 10 7 10;
+    -fx-font-size: 13px;
+}
+
+.input-field:focused {
+    -fx-border-color: #2E74B5;
+    -fx-background-color: white;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.primary-btn {
+    -fx-background-color: #1F4E79;
+    -fx-text-fill: white;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-padding: 9 0 9 0;
+    -fx-background-radius: 5;
+    -fx-cursor: hand;
+}
+
+.primary-btn:hover {
+    -fx-background-color: #2E74B5;
+}
+
+.secondary-btn {
+    -fx-background-color: #EEF2F7;
+    -fx-text-fill: #2E74B5;
+    -fx-font-size: 12px;
+    -fx-padding: 7 0 7 0;
+    -fx-background-radius: 5;
+    -fx-border-color: #C5D0DC;
+    -fx-border-radius: 5;
+    -fx-cursor: hand;
+}
+
+.secondary-btn:hover {
+    -fx-background-color: #DDE8F5;
+}
+
+.clear-btn {
+    -fx-background-color: #1A7F4B;
+    -fx-text-fill: white;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-padding: 8 18 8 18;
+    -fx-background-radius: 5;
+    -fx-cursor: hand;
+}
+
+.clear-btn:hover {
+    -fx-background-color: #22A060;
+}
+
+.clear-btn:disabled {
+    -fx-background-color: #AACFBE;
+    -fx-text-fill: #eee;
+}
+
+/* ── Stats ───────────────────────────────────────────────────────────────── */
+.stat-label {
+    -fx-text-fill: #666;
+    -fx-font-size: 13px;
+}
+
+.stat-value-waiting {
+    -fx-font-weight: bold;
+    -fx-font-size: 15px;
+    -fx-text-fill: #C07000;
+}
+
+.stat-value-cleared {
+    -fx-font-weight: bold;
+    -fx-font-size: 15px;
+    -fx-text-fill: #1A7F4B;
+}
+
+.stat-value-peers {
+    -fx-font-weight: bold;
+    -fx-font-size: 15px;
+    -fx-text-fill: #2E74B5;
+}
+
+/* ── Feedback ────────────────────────────────────────────────────────────── */
+.feedback-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: #1A7F4B;
+    -fx-font-weight: bold;
+    -fx-wrap-text: true;
+}
+
+/* ── Table ───────────────────────────────────────────────────────────────── */
+.table-pane {
+    -fx-background-color: #F0F4F8;
+}
+
+.queue-table {
+    -fx-background-color: white;
+    -fx-border-color: #DDE3EA;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+}
+
+.queue-table .column-header-background {
+    -fx-background-color: #1F4E79;
+}
+
+.queue-table .column-header {
+    -fx-background-color: transparent;
+}
+
+.queue-table .column-header .label {
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-font-size: 12px;
+}
+
+.queue-table .table-row-cell {
+    -fx-border-color: transparent transparent #EEF2F7 transparent;
+    -fx-font-size: 13px;
+}
+
+.queue-table .table-row-cell:selected {
+    -fx-background-color: #D6E8F5;
+}
+
+.queue-table .table-row-cell:hover {
+    -fx-background-color: #EEF7FF;
+}
+
+.empty-label {
+    -fx-text-fill: #AAA;
+    -fx-font-size: 14px;
+}
+
+/* ── Sync Log ────────────────────────────────────────────────────────────── */
+.sync-log {
+    -fx-font-size: 11px;
+    -fx-text-fill: #888;
+    -fx-font-style: italic;
+}
