@@ -61,13 +61,17 @@ public class Main extends Application {
 
         queueManager = new QueueManager(nodeId, db, client, peers);
 
-        // ── 2. Start TCP server ──────────────────────────────────────────────
+        // ── 2. Load from local DB immediately (Bootstrap state) ──────────────
+        LOG.info("Loading local persisted state...");
+        queueManager.loadFromDatabase();
+
+        // ── 3. Start TCP server ──────────────────────────────────────────────
         TCPServer server = new TCPServer(tcpPort, queueManager);
         Thread serverThread = new Thread(server, "tcp-server");
         serverThread.setDaemon(true);
         serverThread.start();
 
-        // ── 3. Start UDP discovery ───────────────────────────────────────────
+        // ── 4. Start UDP discovery ───────────────────────────────────────────
         UDPDiscoveryService discovery = new UDPDiscoveryService(
                 nodeId, tcpPort, peers,
                 peer -> {
@@ -83,15 +87,9 @@ public class Main extends Application {
         discoveryThread.setDaemon(true);
         discoveryThread.start();
 
-        // ── 4. Wait for peer discovery ───────────────────────────────────────
+        // ── 5. Wait for peer discovery ───────────────────────────────────────
         LOG.info("Waiting 3s for peer discovery...");
         Thread.sleep(3000);
-
-        // ── 5. If no peers found, load from local DB (first node) ────────────
-        if (peers.isEmpty()) {
-            LOG.info("No peers found — loading from local database");
-            queueManager.loadFromDatabase();
-        }
 
         // ── 6. Launch JavaFX UI ──────────────────────────────────────────────
         FXMLLoader loader = new FXMLLoader(
