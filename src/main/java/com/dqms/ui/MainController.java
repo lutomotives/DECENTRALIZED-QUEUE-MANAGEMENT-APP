@@ -134,6 +134,11 @@ public class MainController {
         }
 
         Ticket t = queueManager.createTicket(reg, name);
+        if (t == null) {
+            joinFeedback.setStyle("-fx-text-fill: #CC0000;");
+            joinFeedback.setText("Error: You already have an active ticket.");
+            return;
+        }
 
         // Find position in queue
         List<Ticket> waiting = queueManager.getWaitingTickets();
@@ -144,6 +149,9 @@ public class MainController {
 
         regNumberField.clear();
         studentNameField.clear();
+
+        // Refresh to disable inputs
+        refreshTable();
 
         log("New ticket created: " + reg + " (pos #" + pos + ")");
     }
@@ -175,6 +183,16 @@ public class MainController {
 
         waitingCount.setText(String.valueOf(waiting));
         clearedCount.setText(String.valueOf(cleared));
+
+        // Enforce one-ticket-per-node: disable join inputs if node has active ticket
+        boolean hasActive = queueManager.hasActiveTicket();
+        joinButton.setDisable(hasActive);
+        regNumberField.setDisable(hasActive);
+        studentNameField.setDisable(hasActive);
+        if (hasActive) {
+            joinFeedback.setText("You are currently in the queue.");
+            joinFeedback.setStyle("-fx-text-fill: #1A7F4B;");
+        }
 
         // Re-check clear button state
         Ticket sel = queueTable.getSelectionModel().getSelectedItem();

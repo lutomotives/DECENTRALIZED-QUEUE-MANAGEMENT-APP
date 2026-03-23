@@ -53,7 +53,23 @@ public class QueueManager {
         }
     }
 
+    /**
+     * @return true if this node already has a ticket in 'WAITING' status.
+     */
+    public boolean hasActiveTicket() {
+        synchronized (queue) {
+            return queue.stream()
+                    .anyMatch(t -> t.getOriginNodeId().equalsIgnoreCase(nodeId)
+                            && "WAITING".equals(t.getStatus()));
+        }
+    }
+
     public synchronized Ticket createTicket(String registrationNumber, String studentName) {
+        if (hasActiveTicket()) {
+            LOG.warning("Node " + nodeId + " already has an active ticket. Request ignored.");
+            return null;
+        }
+
         Ticket ticket = new Ticket(registrationNumber, studentName, System.currentTimeMillis(), nodeId);
         LOG.info(">>> CREATING TICKET: " + ticket.getTicketId() + " for origin " + nodeId);
         db.insertTicket(ticket);
