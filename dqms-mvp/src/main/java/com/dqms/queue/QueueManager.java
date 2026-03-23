@@ -56,13 +56,27 @@ public class QueueManager {
         return "NODE_001".equalsIgnoreCase(nodeId);
     }
 
+    /**
+     * @return true if this node already has a ticket in 'WAITING' status.
+     */
+    public boolean hasActiveTicket() {
+        return queue.stream()
+                .anyMatch(t -> t.getOriginNodeId().equalsIgnoreCase(nodeId)
+                        && "WAITING".equals(t.getStatus()));
+    }
+
     // ── LOCAL OPERATIONS (triggered by this node's UI) ────────────────────────
 
     /**
      * Student joins the queue from THIS node.
-     * Creates ticket, persists locally, sends only to Admin if not admin.
+     * Enforces one-ticket-per-node constraint.
      */
     public synchronized Ticket createTicket(String registrationNumber, String studentName) {
+        if (hasActiveTicket()) {
+            LOG.warning("Node " + nodeId + " already has an active ticket. Request ignored.");
+            return null;
+        }
+
         long now = System.currentTimeMillis();
         Ticket ticket = new Ticket(registrationNumber, studentName, now, nodeId);
 

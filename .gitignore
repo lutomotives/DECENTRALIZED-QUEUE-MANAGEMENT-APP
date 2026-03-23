@@ -1,0 +1,40 @@
+# Maven build artifacts
+target/
+**/target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+build.log
+
+# Java Class files
+*.class
+
+# IDE Files (IntelliJ, Eclipse, VS Code)
+.idea/
+*.iml
+*.iws
+.settings/
+.classpath
+.project
+.factorypath
+.vscode/
+bin/
+
+# Local SQLite Databases
+*.db
+**/dqms_NODE_*.db
+
+# Log files
+*.log
+logs/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Temp files
+*.tmp
+*.bak
