@@ -17,67 +17,48 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
-/**
- * Application entry point.
- *
- * Usage:
- *   mvn javafx:run -D javafx.args="5001 NODE_001"   ← Node 1
- *   mvn javafx:run -D javafx.args="5002 NODE_002"   ← Node 2 (new terminal)
- *
- * Args:
- *   args[0] — TCP port (e.g. 5001)
- *   args[1] — Node ID  (e.g. NODE_001)
- *
- * Startup sequence:
- *   1. Start TCPServer (accept incoming peer connections)
- *   2. Start UDPDiscovery (announce self, collect peers)
- *   3. Wait 3s for peer responses
- *   4. If peers found → send SYNC_REQUEST to first peer
- *   5. If no peers   → load from local SQLite DB
- *   6. Launch JavaFX UI
- */
 public class Main extends Application {
 
     private static final Logger LOG = Logger.getLogger(Main.class.getName());
 
-    // Shared state passed between network and UI layers
     public static QueueManager queueManager;
     public static String       nodeId;
     public static int          tcpPort;
+    public static boolean      isAdmin;
 
     @Override
     public void start(Stage stage) throws Exception {
-        // Parse args (JavaFX passes them via getParameters())
         var params = getParameters().getRaw();
         tcpPort = params.size() > 0 ? Integer.parseInt(params.get(0)) : 5001;
         nodeId  = params.size() > 1 ? params.get(1) : "NODE_001";
+        
+        if (params.size() > 2) {
+            isAdmin = "ADMIN".equalsIgnoreCase(params.get(2));
+        } else {
+            isAdmin = "NODE_001".equalsIgnoreCase(nodeId);
+        }
 
-        LOG.info("=== Starting DQMS Node: " + nodeId + " on port " + tcpPort + " ===");
+        LOG.info("=== Starting DQMS Node: " + nodeId + " (Admin: " + isAdmin + ") on port " + tcpPort + " ===");
 
-        // ── 1. Init core components ──────────────────────────────────────────
         DatabaseManager db     = new DatabaseManager(nodeId);
         TCPClient       client = new TCPClient();
+        client.setMyTcpPort(tcpPort); // Important for TCP-based discovery
+        
         Map<String, NodeInfo> peers = new ConcurrentHashMap<>();
 
-        queueManager = new QueueManager(nodeId, db, client, peers);
-
-        // ── 2. Load from local DB immediately (Bootstrap state) ──────────────
-        LOG.info("Loading local persisted state...");
+        queueManager = new QueueManager(nodeId, tcpPort, db, client, peers, isAdmin);
         queueManager.loadFromDatabase();
 
-        // ── 3. Start TCP server ──────────────────────────────────────────────
         TCPServer server = new TCPServer(tcpPort, queueManager);
         Thread serverThread = new Thread(server, "tcp-server");
         serverThread.setDaemon(true);
         serverThread.start();
 
-        // ── 4. Start UDP discovery ───────────────────────────────────────────
         UDPDiscoveryService discovery = new UDPDiscoveryService(
-                nodeId, tcpPort, peers,
+                nodeId, tcpPort, isAdmin, peers,
                 peer -> {
-                    // Called when a NEW peer is discovered for the first time
-                    LOG.info("New peer found: " + peer + " — sending SYNC_REQUEST");
-                    Message response = client.requestSync(peer, nodeId);
+                    LOG.info("UDP discovered peer: " + peer + " — requesting sync.");
+                    Message response = client.requestSync(peer, nodeId, isAdmin);
                     if (response != null && response.getTicketList() != null) {
                         queueManager.applySyncResponse(response.getTicketList());
                     }
@@ -87,18 +68,11 @@ public class Main extends Application {
         discoveryThread.setDaemon(true);
         discoveryThread.start();
 
-        // ── 5. Wait for peer discovery ───────────────────────────────────────
-        LOG.info("Waiting 3s for peer discovery...");
-        Thread.sleep(3000);
+        Thread.sleep(2000);
 
-        // ── 6. Launch JavaFX UI ──────────────────────────────────────────────
-        FXMLLoader loader = new FXMLLoader(
-                getClass().getResource("/com/dqms/ui/main.fxml"));
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/dqms/ui/main.fxml"));
         Scene scene = new Scene(loader.load(), 860, 620);
-
-        // Apply stylesheet
-        scene.getStylesheets().add(
-                getClass().getResource("/com/dqms/ui/style.css").toExternalForm());
+        scene.getStylesheets().add(getClass().getResource("/com/dqms/ui/style.css").toExternalForm());
 
         MainController controller = loader.getController();
         controller.init(queueManager);
@@ -106,11 +80,10 @@ public class Main extends Application {
         stage.setTitle("DQMS — " + nodeId + " (port " + tcpPort + ")");
         stage.setScene(scene);
         stage.show();
-
-        LOG.info("UI launched for " + nodeId);
     }
 
     public static void main(String[] args) {
+        System.setProperty("java.net.preferIPv4Stack", "true");
         launch(args);
     }
 }

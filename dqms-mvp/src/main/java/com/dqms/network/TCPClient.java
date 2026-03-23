@@ -13,60 +13,73 @@ import java.util.logging.Logger;
 
 /**
  * Sends messages to peer nodes over TCP.
- * Each send opens a new connection, writes the message, and closes.
  */
 public class TCPClient {
 
     private static final Logger LOG = Logger.getLogger(TCPClient.class.getName());
     private static final int TIMEOUT_MS = 3000;
-    
-    // Use a cached thread pool for parallel broadcasts
     private final ExecutorService executor = Executors.newCachedThreadPool();
+    
+    private int myTcpPort;
 
-    /**
-     * Send a message to a single peer. Returns true if successful.
-     */
+    public void setMyTcpPort(int port) {
+        this.myTcpPort = port;
+    }
+
     public boolean send(NodeInfo peer, Message message) {
+        LOG.info("<<< [TCP] Sending " + message.getType() + " to " + peer.getNodeId() + " (" + peer.getIpAddress() + ")");
         try (Socket socket = new Socket(peer.getIpAddress(), peer.getTcpPort())) {
             socket.setSoTimeout(TIMEOUT_MS);
-            ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-            out.writeObject(message);
-            out.flush();
+            
+            // Header is written immediately upon construction
+            try (ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
+                out.writeObject(message);
+                out.flush();
+                // Brief pause to allow the receiving node to process the ObjectInputStream 
+                // before the socket is forcefully closed and torn down.
+                Thread.sleep(50);
+            }
             return true;
         } catch (Exception e) {
-            LOG.warning("Failed to send to " + peer + ": " + e.getMessage());
+            LOG.warning("Failed to send " + message.getType() + " to " + peer.getNodeId() + ": " + e.getMessage());
             return false;
         }
     }
 
-    /**
-     * Broadcast a message to all known peers in parallel.
-     */
     public void broadcast(Collection<NodeInfo> peers, Message message) {
-        if (peers == null || peers.isEmpty()) return;
+        if (peers == null || peers.isEmpty()) {
+            LOG.info("Broadcast skipped: No peers discovered yet.");
+            return;
+        }
+        LOG.info("Broadcasting " + message.getType() + " to " + peers.size() + " peers.");
         for (NodeInfo peer : peers) {
             executor.submit(() -> send(peer, message));
         }
     }
 
-    /**
-     * Send a SYNC_REQUEST and return the SYNC_RESPONSE from the peer.
-     * Returns null if the request fails.
-     */
-    public Message requestSync(NodeInfo peer, String myNodeId) {
+    public Message requestSync(NodeInfo peer, String myNodeId, boolean isAdmin) {
+        LOG.info("<<< [TCP] Requesting SYNC from " + peer.getNodeId());
         try (Socket socket = new Socket(peer.getIpAddress(), peer.getTcpPort())) {
             socket.setSoTimeout(5000);
+            
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-            ObjectInputStream  in  = new ObjectInputStream(socket.getInputStream());
-
-            out.writeObject(Message.syncRequest(myNodeId));
+            out.flush(); // Send header
+            
+            // WRITE THE REQUEST FIRST
+            out.writeObject(Message.syncRequest(myNodeId, isAdmin, myTcpPort));
             out.flush();
 
-            Message response = (Message) in.readObject();
-            LOG.info("Received SYNC_RESPONSE from " + peer);
-            return response;
+            // THEN open InputStream to wait for the response header
+            try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
+                Object response = in.readObject();
+                if (response instanceof Message) {
+                    LOG.info("Received SYNC_RESPONSE from " + peer.getNodeId());
+                    return (Message) response;
+                }
+            }
+            return null;
         } catch (Exception e) {
-            LOG.warning("Sync request to " + peer + " failed: " + e.getMessage());
+            LOG.warning("Sync request to " + peer.getNodeId() + " failed: " + e.getMessage());
             return null;
         }
     }

@@ -36,7 +36,9 @@ public class Ticket implements Serializable, Comparable<Ticket> {
         if (this.issueTime != other.issueTime) {
             return Long.compare(this.issueTime, other.issueTime);
         }
-        return this.registrationNumber.compareTo(other.registrationNumber);
+        String thisReg = this.registrationNumber != null ? this.registrationNumber : "";
+        String otherReg = other.registrationNumber != null ? other.registrationNumber : "";
+        return thisReg.compareTo(otherReg);
     }
 
     // ── Getters ──────────────────────────────────────────────────────────────

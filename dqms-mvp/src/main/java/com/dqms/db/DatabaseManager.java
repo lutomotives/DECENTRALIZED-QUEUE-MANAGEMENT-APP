@@ -1,7 +1,7 @@
 package com.dqms.db;
 
 import com.dqms.model.Ticket;
-
+import java.io.File;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -9,110 +9,156 @@ import java.util.logging.Logger;
 
 /**
  * Manages the local SQLite database for this node.
- * Each node keeps its own dqms_<nodeId>.db file.
- *
- * Schema:
- *   tickets(ticket_id PK, registration_number, student_name, issue_time, origin_node, status)
  */
 public class DatabaseManager {
 
     private static final Logger LOG = Logger.getLogger(DatabaseManager.class.getName());
-    private final Connection conn;
+    private Connection conn;
+    private final String dbName;
 
-    public DatabaseManager(String nodeId) throws SQLException {
-        String dbPath = "dqms_" + nodeId + ".db";
-        conn = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
-        LOG.info("Connected to SQLite: " + dbPath);
-        initSchema();
+    public DatabaseManager(String nodeId) {
+        this.dbName = "dqms_" + nodeId + ".db";
+        try {
+            File dbFile = new File(dbName);
+            LOG.info(">>> DATABASE FILE: " + dbFile.getAbsolutePath());
+            if (!dbFile.exists()) {
+                LOG.info(">>> Database file does not exist. A new one will be created.");
+            } else {
+                LOG.info(">>> Database file exists. Size: " + dbFile.length() + " bytes");
+            }
+            
+            String url = "jdbc:sqlite:" + dbName;
+            conn = DriverManager.getConnection(url);
+            
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("PRAGMA busy_timeout = 5000;");
+            }
+            
+            createTable();
+        } catch (SQLException e) {
+            LOG.severe("Database connection failed: " + e.getMessage());
+        }
     }
 
-    private void initSchema() throws SQLException {
-        String sql = """
-                CREATE TABLE IF NOT EXISTS tickets (
-                    ticket_id           TEXT PRIMARY KEY,
-                    registration_number TEXT NOT NULL,
-                    student_name        TEXT NOT NULL,
-                    issue_time          INTEGER NOT NULL,
-                    origin_node         TEXT NOT NULL,
-                    status              TEXT NOT NULL DEFAULT 'WAITING'
-                );
-                """;
+    private void createTable() throws SQLException {
+        // First check if the table exists and has the correct schema
+        boolean needsRecreation = false;
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("PRAGMA table_info(tickets)")) {
+            boolean hasTicketId = false;
+            boolean hasIssueTime = false;
+            while (rs.next()) {
+                String colName = rs.getString("name");
+                if ("ticketId".equals(colName)) hasTicketId = true;
+                if ("issueTime".equals(colName)) hasIssueTime = true;
+            }
+            // If table exists but lacks critical new columns from our schema updates, we must recreate it.
+            // (A production app would use ALTER TABLE, but for this MVP, recreation is safer).
+            if (hasTicketId || hasIssueTime) { // Actually, if it HAS them it's likely fine. Wait, if it exists but DOESN'T have them, recreate.
+                // Re-evaluating: If the table exists (rs has rows) but lacks 'ticketId', it's corrupt/old.
+            }
+            
+            // To be safe, just run a quick query to see if it throws an error
+            try {
+                 stmt.executeQuery("SELECT ticketId, issueTime FROM tickets LIMIT 1");
+            } catch (SQLException e) {
+                 if (e.getMessage().contains("no such table")) {
+                     // normal, needs creation
+                 } else {
+                     LOG.warning(">>> DB SCHEMA MISMATCH DETECTED. Recreating table to fix corruption.");
+                     needsRecreation = true;
+                 }
+            }
+        } catch (SQLException e) {
+             // Ignore
+        }
+
+        if (needsRecreation) {
+             try (Statement stmt = conn.createStatement()) {
+                 stmt.execute("DROP TABLE IF EXISTS tickets");
+             }
+        }
+
+        String sql = "CREATE TABLE IF NOT EXISTS tickets (" +
+                     "ticketId TEXT PRIMARY KEY, " +
+                     "registrationNumber TEXT, " +
+                     "studentName TEXT, " +
+                     "issueTime INTEGER, " +
+                     "originNodeId TEXT, " +
+                     "status TEXT" +
+                     ");";
         try (Statement stmt = conn.createStatement()) {
             stmt.execute(sql);
         }
     }
 
-    /**
-     * Insert a ticket. Uses INSERT OR IGNORE to safely handle duplicates
-     * that arrive via network replication.
-     */
-    public void insertTicket(Ticket t) {
-        String sql = """
-                INSERT OR IGNORE INTO tickets
-                    (ticket_id, registration_number, student_name, issue_time, origin_node, status)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """;
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, t.getTicketId());
-            ps.setString(2, t.getRegistrationNumber());
-            ps.setString(3, t.getStudentName());
-            ps.setLong(4, t.getIssueTime());
-            ps.setString(5, t.getOriginNodeId());
-            ps.setString(6, t.getStatus());
-            ps.executeUpdate();
+    public synchronized void insertTicket(Ticket t) {
+        String sql = "INSERT OR IGNORE INTO tickets (ticketId, registrationNumber, studentName, issueTime, originNodeId, status) VALUES (?,?,?,?,?,?)";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, t.getTicketId());
+            pstmt.setString(2, t.getRegistrationNumber());
+            pstmt.setString(3, t.getStudentName());
+            pstmt.setLong(4, t.getIssueTime());
+            pstmt.setString(5, t.getOriginNodeId());
+            pstmt.setString(6, t.getStatus());
+            int affected = pstmt.executeUpdate();
+            if (affected > 0) {
+                LOG.info(">>> DB INSERT SUCCESS: " + t.getTicketId());
+            } else {
+                LOG.info(">>> DB INSERT IGNORED (Duplicate): " + t.getTicketId());
+            }
         } catch (SQLException e) {
             LOG.warning("insertTicket failed: " + e.getMessage());
         }
     }
 
-    /**
-     * Update a ticket's status (e.g. WAITING → CLEARED).
-     */
-    public void updateStatus(String ticketId, String status) {
-        String sql = "UPDATE tickets SET status = ? WHERE ticket_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, status);
-            ps.setString(2, ticketId);
-            ps.executeUpdate();
+    public synchronized void updateStatus(String ticketId, String newStatus) {
+        String sql = "UPDATE tickets SET status = ? WHERE ticketId = ?";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, newStatus);
+            pstmt.setString(2, ticketId);
+            int affected = pstmt.executeUpdate();
+            LOG.info(">>> DB UPDATE: " + ticketId + " -> " + newStatus + " (Rows affected: " + affected + ")");
         } catch (SQLException e) {
             LOG.warning("updateStatus failed: " + e.getMessage());
         }
     }
 
-    /**
-     * Check if a ticket already exists — used to prevent replication duplicates.
-     */
-    public boolean ticketExists(String ticketId) {
-        String sql = "SELECT 1 FROM tickets WHERE ticket_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, ticketId);
-            ResultSet rs = ps.executeQuery();
-            return rs.next();
+    public synchronized boolean ticketExists(String ticketId) {
+        String sql = "SELECT 1 FROM tickets WHERE ticketId = ?";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, ticketId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                return rs.next();
+            }
         } catch (SQLException e) {
-            LOG.warning("ticketExists check failed: " + e.getMessage());
             return false;
         }
     }
 
-    /**
-     * Load all tickets from the database — called on node startup to
-     * rebuild the in-memory PriorityQueue.
-     */
-    public List<Ticket> getAllTickets() {
+    public synchronized List<Ticket> getAllTickets() {
         List<Ticket> tickets = new ArrayList<>();
-        String sql = "SELECT * FROM tickets ORDER BY issue_time ASC";
+        if (conn == null) {
+            LOG.severe(">>> DB GET ALL FAILED: Connection is NULL");
+            return tickets;
+        }
+        
+        String sql = "SELECT * FROM tickets ORDER BY issueTime ASC";
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
+            int count = 0;
             while (rs.next()) {
                 Ticket t = new Ticket(
-                        rs.getString("registration_number"),
-                        rs.getString("student_name"),
-                        rs.getLong("issue_time"),
-                        rs.getString("origin_node")
+                        rs.getString("registrationNumber"),
+                        rs.getString("studentName"),
+                        rs.getLong("issueTime"),
+                        rs.getString("originNodeId")
                 );
                 t.setStatus(rs.getString("status"));
                 tickets.add(t);
+                count++;
             }
+            LOG.info(">>> DB GET ALL: Found " + count + " entries in " + dbName);
         } catch (SQLException e) {
             LOG.warning("getAllTickets failed: " + e.getMessage());
         }
@@ -120,6 +166,6 @@ public class DatabaseManager {
     }
 
     public void close() {
-        try { conn.close(); } catch (SQLException ignored) {}
+        try { if (conn != null) conn.close(); } catch (SQLException ignored) {}
     }
 }

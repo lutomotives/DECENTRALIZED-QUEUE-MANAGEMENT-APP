@@ -160,8 +160,8 @@ public class MainController {
 
     @FXML
     private void onRefresh() {
-        refreshTable();
-        log("Manual refresh at " + TIME_FMT.format(Instant.now()));
+        queueManager.loadFromDatabase();
+        log("Manual refresh (reloaded from DB) at " + TIME_FMT.format(Instant.now()));
     }
 
     // ── UI Update Helpers ─────────────────────────────────────────────────────
@@ -184,19 +184,15 @@ public class MainController {
     private boolean canClear(Ticket ticket) {
         if (ticket == null || !"WAITING".equals(ticket.getStatus())) return false;
 
-        // Admin (NODE_001) can clear ANY ticket
-        if (queueManager.isAdmin()) return true;
-
-        // Regular nodes can only clear their OWN tickets
-        return ticket.getOriginNodeId().equalsIgnoreCase(queueManager.getNodeId());
+        // ONLY Admin can clear tickets. Regular nodes can only view.
+        return queueManager.isAdmin();
     }
 
     private void refreshPeerStatus() {
         int count = queueManager.getPeerCount();
         peerCount.setText(String.valueOf(count));
-        statusLabel.setText(count > 0
-                ? "● " + count + " peer(s) connected"
-                : "○ No peers — standalone mode");
+        String roleStr = queueManager.isAdmin() ? "ADMIN" : "REGULAR";
+        statusLabel.setText(String.format("● %s | %d peer(s)", roleStr, count));
         statusLabel.setStyle(count > 0
                 ? "-fx-text-fill: #90EE90;"
                 : "-fx-text-fill: #FFB74D;");

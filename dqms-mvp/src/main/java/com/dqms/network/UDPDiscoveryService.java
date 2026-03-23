@@ -4,23 +4,14 @@ import com.dqms.model.NodeInfo;
 
 import java.net.*;
 import java.nio.charset.StandardCharsets;
+import java.util.Enumeration;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 /**
  * Discovers peers on the network using UDP multicast.
- *
- * Protocol:
- *   Announcement packet format: "DQMS_NODE:<nodeId>:<tcpPort>"
- *
- * For single-machine testing (2 nodes on localhost), multicast still
- * works because the loopback interface supports multicast. Both nodes
- * will hear each other's announcements.
- *
- * Multicast group : 239.0.0.1
- * UDP port        : 4446
+ * Announcement: "DQMS_NODE:<nodeId>:<tcpPort>:<ROLE>"
  */
 public class UDPDiscoveryService implements Runnable {
 
@@ -32,67 +23,76 @@ public class UDPDiscoveryService implements Runnable {
 
     private final String nodeId;
     private final int    tcpPort;
-    private final Map<String, NodeInfo> peers;       // nodeId → NodeInfo
-    private final Consumer<NodeInfo>    onPeerFound; // callback for new peer
+    private final boolean isAdmin;
+    private final Map<String, NodeInfo> peers;
+    private final Consumer<NodeInfo>    onPeerFound;
     private volatile boolean running = true;
 
-    public UDPDiscoveryService(String nodeId, int tcpPort,
+    public UDPDiscoveryService(String nodeId, int tcpPort, boolean isAdmin,
                                 Map<String, NodeInfo> peers,
                                 Consumer<NodeInfo> onPeerFound) {
         this.nodeId      = nodeId;
         this.tcpPort     = tcpPort;
+        this.isAdmin     = isAdmin;
         this.peers       = peers;
         this.onPeerFound = onPeerFound;
     }
 
     @Override
     public void run() {
-        LOG.info("Starting UDP Discovery on " + MULTICAST_GROUP + ":" + UDP_PORT);
+        LOG.info("UDP Discovery active on " + MULTICAST_GROUP + ":" + UDP_PORT);
         try (MulticastSocket socket = new MulticastSocket(UDP_PORT)) {
             InetAddress group = InetAddress.getByName(MULTICAST_GROUP);
             InetSocketAddress groupAddress = new InetSocketAddress(group, UDP_PORT);
+            
+            // Join group on all available interfaces to handle multi-NIC Windows machines
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface iface = interfaces.nextElement();
+                if (iface.isUp() && iface.supportsMulticast() && !iface.isVirtual()) {
+                    try {
+                        socket.joinGroup(groupAddress, iface);
+                        LOG.fine("Joined multicast group on interface: " + iface.getDisplayName());
+                    } catch (Exception e) {
+                        // Some interfaces might fail to join, ignore them
+                    }
+                }
+            }
 
-            // Join the multicast group on the default interface
-            socket.joinGroup(groupAddress, null);
-            LOG.info("Joined multicast group: " + MULTICAST_GROUP);
+            socket.setLoopbackMode(false); // ENABLE loopback
 
-            // Enable loopback so nodes on the same machine hear each other
-            socket.setLoopbackMode(false); 
-
-            // Announce ourselves in a separate thread
             Thread announcer = new Thread(this::announceLoop, "udp-announcer");
             announcer.setDaemon(true);
             announcer.start();
 
-            // Listen for peer announcements
             byte[] buf = new byte[256];
             while (running) {
                 DatagramPacket packet = new DatagramPacket(buf, buf.length);
                 socket.receive(packet);
-
                 String msg = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8);
                 handleAnnouncement(msg, packet.getAddress().getHostAddress());
             }
-
-            socket.leaveGroup(groupAddress, null);
+            
+            // Leave group on all interfaces
+            interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface iface = interfaces.nextElement();
+                try { socket.leaveGroup(groupAddress, iface); } catch (Exception ignored) {}
+            }
         } catch (Exception e) {
             if (running) LOG.severe("UDPDiscovery error: " + e.getMessage());
-            e.printStackTrace();
         }
     }
 
     private void announceLoop() {
-        String announcement = ANNOUNCE_PREFIX + nodeId + ":" + tcpPort;
+        String announcement = ANNOUNCE_PREFIX + nodeId + ":" + tcpPort + ":" + (isAdmin ? "ADMIN" : "REGULAR");
         byte[] data = announcement.getBytes(StandardCharsets.UTF_8);
-
         try (DatagramSocket socket = new DatagramSocket()) {
             InetAddress group = InetAddress.getByName(MULTICAST_GROUP);
             DatagramPacket packet = new DatagramPacket(data, data.length, group, UDP_PORT);
-
             while (running) {
                 socket.send(packet);
-                LOG.fine("Announced: " + announcement);
-                Thread.sleep(2000); // announce every 2 seconds
+                Thread.sleep(2000);
             }
         } catch (Exception e) {
             if (running) LOG.warning("Announcer error: " + e.getMessage());
@@ -101,22 +101,22 @@ public class UDPDiscoveryService implements Runnable {
 
     private void handleAnnouncement(String msg, String senderIp) {
         if (!msg.startsWith(ANNOUNCE_PREFIX)) return;
-
-        // Format: DQMS_NODE:<nodeId>:<tcpPort>
         String[] parts = msg.substring(ANNOUNCE_PREFIX.length()).split(":");
-        if (parts.length != 2) return;
+        if (parts.length != 3) return;
 
         String peerId   = parts[0];
         int    peerPort;
-        try { peerPort = Integer.parseInt(parts[1]); }
-        catch (NumberFormatException e) { return; }
+        try { peerPort = Integer.parseInt(parts[1]); } catch (Exception e) { return; }
+        boolean peerIsAdmin = "ADMIN".equalsIgnoreCase(parts[2]);
 
-        // Ignore our own announcement
         if (peerId.equals(nodeId)) return;
 
-        // Register new peer
         if (!peers.containsKey(peerId)) {
-            NodeInfo peer = new NodeInfo(peerId, senderIp, peerPort);
+            // Use 127.0.0.1 if sender is from this machine to avoid routing issues
+            String targetIp = senderIp;
+            if (senderIp.equals("0:0:0:0:0:0:0:1")) targetIp = "127.0.0.1";
+
+            NodeInfo peer = new NodeInfo(peerId, targetIp, peerPort, peerIsAdmin);
             peers.put(peerId, peer);
             LOG.info("Discovered peer: " + peer);
             if (onPeerFound != null) onPeerFound.accept(peer);

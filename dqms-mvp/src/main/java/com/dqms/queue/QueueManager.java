@@ -12,206 +12,145 @@ import java.util.logging.Logger;
 
 /**
  * Central coordinator for all queue operations.
- *
- * Responsibilities:
- *   - Maintain in-memory PriorityBlockingQueue (thread-safe, FIFO-ordered)
- *   - Persist every change to local SQLite via DatabaseManager
- *   - Broadcast changes to all known peers via TCPClient
- *   - Handle incoming replicated events from peers
- *
- * Thread safety: all public mutating methods are synchronized on `this`
- * to prevent race conditions when network threads and UI threads both write.
  */
 public class QueueManager {
 
     private static final Logger LOG = Logger.getLogger(QueueManager.class.getName());
 
     private final String nodeId;
+    private final int tcpPort;
     private final DatabaseManager db;
     private final TCPClient client;
-    private final Map<String, NodeInfo> peers; // shared with UDPDiscovery
+    private final Map<String, NodeInfo> peers;
+    private final boolean isAdmin;
 
-    // Thread-safe priority queue using our Ticket.compareTo() for FIFO ordering
     private final PriorityBlockingQueue<Ticket> queue = new PriorityBlockingQueue<>();
-
-    // UI refresh callback — set by the JavaFX controller
     private Runnable onQueueChanged;
 
-    public QueueManager(String nodeId, DatabaseManager db, TCPClient client,
-                        Map<String, NodeInfo> peers) {
-        this.nodeId = nodeId;
-        this.db     = db;
-        this.client = client;
-        this.peers  = peers;
+    public QueueManager(String nodeId, int tcpPort, DatabaseManager db, TCPClient client,
+                        Map<String, NodeInfo> peers, boolean isAdmin) {
+        this.nodeId  = nodeId;
+        this.tcpPort = tcpPort;
+        this.db      = db;
+        this.client  = client;
+        this.peers   = peers;
+        this.isAdmin = isAdmin;
+        LOG.info(">>> QUEUE MANAGER STARTUP: [" + nodeId + "] | ADMIN ROLE: " + isAdmin);
     }
 
     public synchronized void setOnQueueChanged(Runnable callback) {
         this.onQueueChanged = callback;
     }
 
-    /**
-     * @return true if this node is the designated Admin (NODE_001)
-     */
-    public boolean isAdmin() {
-        return "NODE_001".equalsIgnoreCase(nodeId);
+    public boolean isAdmin() { return isAdmin; }
+
+    public synchronized void registerPeer(String peerId, String ip, int port, boolean peerIsAdmin) {
+        if (peerId.equals(nodeId)) return;
+        if (!peers.containsKey(peerId)) {
+            NodeInfo peer = new NodeInfo(peerId, ip, port, peerIsAdmin);
+            peers.put(peerId, peer);
+            LOG.info(">>> PEER CONNECTED: " + peerId);
+        }
     }
 
-    // ── LOCAL OPERATIONS (triggered by this node's UI) ────────────────────────
-
-    /**
-     * Student joins the queue from THIS node.
-     * Creates ticket, persists locally, sends only to Admin if not admin.
-     */
     public synchronized Ticket createTicket(String registrationNumber, String studentName) {
-        long now = System.currentTimeMillis();
-        Ticket ticket = new Ticket(registrationNumber, studentName, now, nodeId);
-
-        queue.add(ticket);
+        Ticket ticket = new Ticket(registrationNumber, studentName, System.currentTimeMillis(), nodeId);
+        LOG.info(">>> CREATING TICKET: " + ticket.getTicketId() + " for origin " + nodeId);
         db.insertTicket(ticket);
-
-        // Targeted Messaging:
-        // If not admin, send to NODE_001. If admin, don't broadcast.
-        Message msg = Message.newTicket(nodeId, ticket);
-        if (!isAdmin()) {
-            sendToNode("NODE_001", msg);
-        }
-
-        LOG.info("Created ticket: " + ticket);
-        notifyUIChanged();
+        loadFromDatabase(); 
+        Message msg = Message.newTicket(nodeId, isAdmin, tcpPort, ticket);
+        client.broadcast(peers.values(), msg);
         return ticket;
     }
 
-    /**
-     * Admin officer clears a student from THIS node's dashboard.
-     * Updates locally and sends update to creator and admin.
-     */
     public synchronized void clearStudent(String ticketId) {
-        Ticket ticket = findTicket(ticketId);
-        if (ticket == null) return;
-
-        // Restriction check
-        if (!isAdmin() && !ticket.getOriginNodeId().equalsIgnoreCase(nodeId)) {
-            LOG.warning("Unauthorized clear attempt by " + nodeId + " on ticket from " + ticket.getOriginNodeId());
+        if (!isAdmin) {
+            LOG.warning(">>> REJECTED: Only Admin can clear tickets.");
             return;
         }
-
-        // Update in-memory
-        ticket.setStatus("CLEARED");
+        LOG.info(">>> ADMIN ACTION: Clearing " + ticketId);
         db.updateStatus(ticketId, "CLEARED");
-
-        // Targeted messaging for update
-        Message msg = Message.updateStatus(nodeId, ticketId, "CLEARED");
-        if (isAdmin()) {
-            // Admin clears someone's ticket, must notify the creator
-            sendToNode(ticket.getOriginNodeId(), msg);
-        } else {
-            // Regular node clears its own ticket, notify Admin
-            sendToNode("NODE_001", msg);
-        }
-
-        LOG.info("Cleared ticket: " + ticketId);
-        notifyUIChanged();
+        loadFromDatabase(); 
+        Message msg = Message.updateStatus(nodeId, isAdmin, tcpPort, ticketId, "CLEARED");
+        client.broadcast(peers.values(), msg);
     }
 
-    // ── INCOMING EVENTS (from peer nodes via TCPServer → MessageHandler) ──────
-
-    /**
-     * A peer sent us a NEW_TICKET. Insert only if we don't already have it.
-     */
     public synchronized void receiveTicket(Ticket ticket) {
-        if (db.ticketExists(ticket.getTicketId())) {
-            LOG.fine("Duplicate ticket ignored: " + ticket.getTicketId());
-            return;
+        if (!db.ticketExists(ticket.getTicketId())) {
+            LOG.info(">>> REPLICATING TICKET: " + ticket.getTicketId());
+            db.insertTicket(ticket);
+            loadFromDatabase();
         }
-        queue.add(ticket);
-        db.insertTicket(ticket);
-        LOG.info("Received ticket from peer: " + ticket);
-        notifyUIChanged();
     }
 
-    /**
-     * A peer sent an UPDATE_STATUS for a ticket.
-     */
     public synchronized void receiveStatusUpdate(String ticketId, String newStatus) {
-        Ticket ticket = findTicket(ticketId);
-        if (ticket != null) {
-            ticket.setStatus(newStatus);
-            db.updateStatus(ticketId, newStatus);
-            LOG.info("Updated ticket " + ticketId + " to " + newStatus);
-            notifyUIChanged();
-        } else {
-            // If we didn't have it (maybe sync issue?), just update DB and it'll show up later if needed
-            db.updateStatus(ticketId, newStatus);
-            LOG.info("Status update for unknown ticket " + ticketId + " → DB updated.");
+        LOG.info(">>> REPLICATING STATUS: " + ticketId + " -> " + newStatus);
+        // If the ticket doesn't exist locally, we still want to request a sync to ensure DB consistency
+        if (!db.ticketExists(ticketId)) {
+            LOG.warning(">>> MISSING TICKET DURING STATUS UPDATE. Requesting full sync...");
+            // We should ideally sync here, but for now we just log.
         }
+        db.updateStatus(ticketId, newStatus);
+        loadFromDatabase();
     }
 
-    /**
-     * We received a SYNC_RESPONSE from a peer after requesting full state.
-     * Rebuild our queue and DB from the peer's data.
-     */
     public synchronized void applySyncResponse(List<Ticket> tickets) {
-        boolean changed = false;
+        if (tickets == null) return;
+        LOG.info(">>> SYNC RECEIVED: Processing " + tickets.size() + " tickets.");
         for (Ticket t : tickets) {
-            if (!db.ticketExists(t.getTicketId())) {
-                db.insertTicket(t);
-                queue.add(t);
-                changed = true;
-            } else {
-                if ("CLEARED".equals(t.getStatus())) {
-                    Ticket local = findTicket(t.getTicketId());
-                    if (local != null && !"CLEARED".equals(local.getStatus())) {
-                        local.setStatus("CLEARED");
-                        db.updateStatus(t.getTicketId(), "CLEARED");
-                        changed = true;
-                    }
-                }
+            db.insertTicket(t);
+            if ("CLEARED".equals(t.getStatus())) {
+                db.updateStatus(t.getTicketId(), "CLEARED");
             }
         }
-        if (changed) {
-            LOG.info("Applied sync response: Merged " + tickets.size() + " tickets");
-            notifyUIChanged();
-        }
+        loadFromDatabase();
     }
 
-    /**
-     * Called on startup to load persisted tickets from local SQLite DB.
-     */
     public synchronized void loadFromDatabase() {
-        List<Ticket> saved = db.getAllTickets();
-        queue.addAll(saved);
-        LOG.info("Loaded " + saved.size() + " tickets from local DB");
-        notifyUIChanged();
+        try {
+            List<Ticket> saved = db.getAllTickets();
+            synchronized (queue) {
+                queue.clear();
+                queue.addAll(saved);
+            }
+            LOG.info(">>> MEMORY RELOAD: Found " + saved.size() + " tickets in DB.");
+            for (Ticket t : saved) {
+                LOG.fine("    - Ticket: " + t.getTicketId() + " | Origin: " + t.getOriginNodeId());
+            }
+            notifyUIChanged();
+        } catch (Exception e) {
+            LOG.severe(">>> ERROR loading from database: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
-    /**
-     * Returns the full in-memory queue without privacy filtering.
-     * Used for internal synchronization between nodes.
-     */
     public List<Ticket> getUnfilteredTickets() {
-        return new ArrayList<>(queue);
+        synchronized (queue) {
+            return new ArrayList<>(queue);
+        }
     }
 
-    /**
-     * Returns all tickets VISIBLE to this node, sorted by status and FIFO.
-     */
     public List<Ticket> getAllTicketsAsList() {
-        List<Ticket> list = new ArrayList<>(queue);
-        
-        // PRIVACY FILTER:
-        // Admin sees everything. Regular nodes see only their own.
-        if (!isAdmin()) {
-            list.removeIf(t -> !t.getOriginNodeId().equalsIgnoreCase(nodeId));
+        List<Ticket> list;
+        synchronized (queue) {
+            list = new ArrayList<>(queue);
         }
 
-        list.sort(Comparator.comparingInt((Ticket t) -> t.getStatus().equals("WAITING") ? 0 : 1)
-                           .thenComparing(Ticket::compareTo));
+        int totalInMem = list.size();
+        if (isAdmin) {
+            LOG.info(">>> UI QUERY [ADMIN]: Showing all " + totalInMem + " tickets.");
+        } else {
+            list.removeIf(t -> !t.getOriginNodeId().equalsIgnoreCase(nodeId));
+            LOG.info(">>> UI QUERY [REGULAR]: Showing " + list.size() + " of " + totalInMem + " tickets (owned by " + nodeId + ").");
+        }
+
+        list.sort(Comparator.comparingInt((Ticket t) -> {
+            String status = t.getStatus();
+            return (status != null && status.equals("WAITING")) ? 0 : 1;
+        }).thenComparing(Ticket::compareTo));
         return list;
     }
 
-    /**
-     * Returns only WAITING tickets VISIBLE to this node in FIFO order.
-     */
     public List<Ticket> getWaitingTickets() {
         return getAllTicketsAsList().stream()
                 .filter(t -> "WAITING".equals(t.getStatus()))
@@ -219,30 +158,17 @@ public class QueueManager {
     }
 
     public String getNodeId()                   { return nodeId; }
-    public Map<String, NodeInfo> getPeers()     { return Collections.unmodifiableMap(peers); }
     public int getPeerCount()                   { return peers.size(); }
 
     private void notifyUIChanged() {
-        if (onQueueChanged != null) onQueueChanged.run();
+        if (onQueueChanged != null) {
+            onQueueChanged.run();
+        }
     }
 
     private Ticket findTicket(String ticketId) {
-        return queue.stream()
-                .filter(t -> t.getTicketId().equals(ticketId))
-                .findFirst()
-                .orElse(null);
-    }
-
-    /**
-     * Helper to send a message to a specific node by ID if found in peers.
-     */
-    private void sendToNode(String targetNodeId, Message msg) {
-        if (targetNodeId.equalsIgnoreCase(nodeId)) return;
-        NodeInfo target = peers.get(targetNodeId);
-        if (target != null) {
-            client.send(target, msg);
-        } else {
-            LOG.fine("Cannot send to " + targetNodeId + " — node not discovered yet.");
+        synchronized (queue) {
+            return queue.stream().filter(t -> t.getTicketId().equals(ticketId)).findFirst().orElse(null);
         }
     }
 }
