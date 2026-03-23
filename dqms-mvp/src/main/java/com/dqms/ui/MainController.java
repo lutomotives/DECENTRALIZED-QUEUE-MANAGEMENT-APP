@@ -101,9 +101,9 @@ public class MainController {
 
         queueTable.setItems(tableData);
 
-        // Enable "Mark Cleared" only when a WAITING row is selected
+        // Enable "Mark Cleared" only when a WAITING row is selected AND current node is authorized
         queueTable.getSelectionModel().selectedItemProperty().addListener((obs, old, sel) -> {
-            clearBtn.setDisable(sel == null || !"WAITING".equals(sel.getStatus()));
+            clearBtn.setDisable(!canClear(sel));
         });
 
         // Register callback for when queue changes (called from network threads)
@@ -178,7 +178,17 @@ public class MainController {
 
         // Re-check clear button state
         Ticket sel = queueTable.getSelectionModel().getSelectedItem();
-        clearBtn.setDisable(sel == null || !"WAITING".equals(sel.getStatus()));
+        clearBtn.setDisable(!canClear(sel));
+    }
+
+    private boolean canClear(Ticket ticket) {
+        if (ticket == null || !"WAITING".equals(ticket.getStatus())) return false;
+
+        // Admin (NODE_001) can clear ANY ticket
+        if (queueManager.isAdmin()) return true;
+
+        // Regular nodes can only clear their OWN tickets
+        return ticket.getOriginNodeId().equalsIgnoreCase(queueManager.getNodeId());
     }
 
     private void refreshPeerStatus() {

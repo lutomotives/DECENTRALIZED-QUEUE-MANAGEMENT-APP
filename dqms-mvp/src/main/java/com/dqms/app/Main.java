@@ -21,8 +21,8 @@ import java.util.logging.Logger;
  * Application entry point.
  *
  * Usage:
- *   mvn javafx:run -Djavafx.args="5001 NODE_001"   ← Node 1
- *   mvn javafx:run -Djavafx.args="5002 NODE_002"   ← Node 2 (new terminal)
+ *   mvn javafx:run -D javafx.args="5001 NODE_001"   ← Node 1
+ *   mvn javafx:run -D javafx.args="5002 NODE_002"   ← Node 2 (new terminal)
  *
  * Args:
  *   args[0] — TCP port (e.g. 5001)

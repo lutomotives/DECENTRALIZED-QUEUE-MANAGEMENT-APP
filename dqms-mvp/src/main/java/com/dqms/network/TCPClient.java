@@ -7,6 +7,8 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.Collection;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 
 /**
@@ -17,6 +19,9 @@ public class TCPClient {
 
     private static final Logger LOG = Logger.getLogger(TCPClient.class.getName());
     private static final int TIMEOUT_MS = 3000;
+    
+    // Use a cached thread pool for parallel broadcasts
+    private final ExecutorService executor = Executors.newCachedThreadPool();
 
     /**
      * Send a message to a single peer. Returns true if successful.
@@ -35,11 +40,12 @@ public class TCPClient {
     }
 
     /**
-     * Broadcast a message to all known peers.
+     * Broadcast a message to all known peers in parallel.
      */
     public void broadcast(Collection<NodeInfo> peers, Message message) {
+        if (peers == null || peers.isEmpty()) return;
         for (NodeInfo peer : peers) {
-            send(peer, message);
+            executor.submit(() -> send(peer, message));
         }
     }
 

@@ -45,8 +45,15 @@ public class QueueManager {
         this.peers  = peers;
     }
 
-    public void setOnQueueChanged(Runnable callback) {
+    public synchronized void setOnQueueChanged(Runnable callback) {
         this.onQueueChanged = callback;
+    }
+
+    /**
+     * @return true if this node is the designated Admin (NODE_001)
+     */
+    public boolean isAdmin() {
+        return "NODE_001".equalsIgnoreCase(nodeId);
     }
 
     // ── LOCAL OPERATIONS (triggered by this node's UI) ────────────────────────
@@ -76,12 +83,26 @@ public class QueueManager {
      * Updates locally and broadcasts to peers.
      */
     public synchronized void clearStudent(String ticketId) {
+        // Find ticket to check origin
+        Ticket ticket = queue.stream()
+                .filter(t -> t.getTicketId().equals(ticketId))
+                .findFirst()
+                .orElse(null);
+
+        if (ticket == null) return;
+
+        // Restriction: Only Admin (NODE_001) can clear tickets created by OTHER nodes.
+        // Regular nodes can only clear tickets they created themselves.
+        if (!isAdmin() && !ticket.getOriginNodeId().equalsIgnoreCase(nodeId)) {
+            LOG.warning("Unauthorized clear attempt by " + nodeId + " on ticket from " + ticket.getOriginNodeId());
+            return;
+        }
+
         queue.removeIf(t -> t.getTicketId().equals(ticketId));
         db.updateStatus(ticketId, "CLEARED");
 
         // Re-add as CLEARED so it stays visible in the list
-        List<Ticket> all = db.getAllTickets();
-        all.stream()
+        db.getAllTickets().stream()
            .filter(t -> t.getTicketId().equals(ticketId))
            .findFirst()
            .ifPresent(t -> {
@@ -135,15 +156,28 @@ public class QueueManager {
      * Rebuild our queue and DB from the peer's data.
      */
     public synchronized void applySyncResponse(List<Ticket> tickets) {
-        queue.clear();
+        boolean changed = false;
         for (Ticket t : tickets) {
             if (!db.ticketExists(t.getTicketId())) {
                 db.insertTicket(t);
+                queue.add(t);
+                changed = true;
+            } else {
+                // If it exists, update status if different (prefer CLEARED over WAITING)
+                // This is a simple conflict resolution for late syncs.
+                if ("CLEARED".equals(t.getStatus())) {
+                    db.updateStatus(t.getTicketId(), "CLEARED");
+                    // Update in-memory queue
+                    queue.removeIf(q -> q.getTicketId().equals(t.getTicketId()));
+                    queue.add(t);
+                    changed = true;
+                }
             }
-            queue.add(t);
         }
-        LOG.info("Applied sync response: " + tickets.size() + " tickets loaded");
-        notifyUIChanged();
+        if (changed) {
+            LOG.info("Applied sync response: Merged " + tickets.size() + " tickets");
+            notifyUIChanged();
+        }
     }
 
     /**

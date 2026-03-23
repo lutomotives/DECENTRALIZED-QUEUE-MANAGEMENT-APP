@@ -19,14 +19,14 @@ import java.util.logging.Logger;
  * works because the loopback interface supports multicast. Both nodes
  * will hear each other's announcements.
  *
- * Multicast group : 230.0.0.0
+ * Multicast group : 239.0.0.1
  * UDP port        : 4446
  */
 public class UDPDiscoveryService implements Runnable {
 
     private static final Logger LOG = Logger.getLogger(UDPDiscoveryService.class.getName());
 
-    public static final String MULTICAST_GROUP = "230.0.0.0";
+    public static final String MULTICAST_GROUP = "239.0.0.1";
     public static final int    UDP_PORT        = 4446;
     private static final String ANNOUNCE_PREFIX = "DQMS_NODE:";
 
@@ -47,12 +47,17 @@ public class UDPDiscoveryService implements Runnable {
 
     @Override
     public void run() {
+        LOG.info("Starting UDP Discovery on " + MULTICAST_GROUP + ":" + UDP_PORT);
         try (MulticastSocket socket = new MulticastSocket(UDP_PORT)) {
             InetAddress group = InetAddress.getByName(MULTICAST_GROUP);
+            InetSocketAddress groupAddress = new InetSocketAddress(group, UDP_PORT);
+
+            // Join the multicast group on the default interface
+            socket.joinGroup(groupAddress, null);
+            LOG.info("Joined multicast group: " + MULTICAST_GROUP);
 
             // Enable loopback so nodes on the same machine hear each other
-            socket.setLoopbackMode(false);
-            socket.joinGroup(group);
+            socket.setLoopbackMode(false); 
 
             // Announce ourselves in a separate thread
             Thread announcer = new Thread(this::announceLoop, "udp-announcer");
@@ -69,9 +74,10 @@ public class UDPDiscoveryService implements Runnable {
                 handleAnnouncement(msg, packet.getAddress().getHostAddress());
             }
 
-            socket.leaveGroup(group);
+            socket.leaveGroup(groupAddress, null);
         } catch (Exception e) {
             if (running) LOG.severe("UDPDiscovery error: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
