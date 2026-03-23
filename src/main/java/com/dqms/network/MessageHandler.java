@@ -52,6 +52,8 @@ public class MessageHandler implements Runnable {
                         queueManager.receiveStatusUpdate(msg.getTicketId(), msg.getNewStatus());
 
                 case SYNC_REQUEST -> {
+                    // All nodes are now allowed to see all tickets.
+                    // Send everything we have to ensure full replication.
                     List<Ticket> all = queueManager.getUnfilteredTickets(); 
                     Message response = Message.syncResponse(
                             queueManager.getNodeId(),
