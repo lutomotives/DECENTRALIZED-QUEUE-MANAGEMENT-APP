@@ -43,6 +43,7 @@ public class QueueManager {
     }
 
     public boolean isAdmin() { return isAdmin; }
+    public int getTcpPort() { return tcpPort; }
 
     public synchronized void registerPeer(String peerId, String ip, int port, boolean peerIsAdmin) {
         if (peerId.equals(nodeId)) return;
@@ -185,5 +186,15 @@ public class QueueManager {
         synchronized (queue) {
             return queue.stream().filter(t -> t.getTicketId().equals(ticketId)).findFirst().orElse(null);
         }
+    }
+
+    /**
+     * Returns all tickets sorted by FIFO order (WAITING first, then CLEARED).
+     */
+    public List<Ticket> getAllTicketsAsList() {
+        List<Ticket> all = new ArrayList<>(queue);
+        all.sort(Comparator.comparingInt((Ticket t) -> t.getStatus().equals("WAITING") ? 0 : 1)
+                           .thenComparing(Ticket::compareTo));
+        return all;
     }
 }

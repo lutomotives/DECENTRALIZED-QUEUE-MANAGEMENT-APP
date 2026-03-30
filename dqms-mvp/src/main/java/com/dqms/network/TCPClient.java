@@ -70,24 +70,16 @@ public class TCPClient {
     /** Number of send attempts before giving up. */
     private static final int MAX_SEND_ATTEMPTS = 2;
 
-    private int myTcpPort; // set by QueueManager before any send
-
     /**
      * Cached thread pool for fire-and-forget broadcast sends. Tasks are
      * submitted asynchronously so a slow peer doesn't block the caller.
-     * Shutdown is handled in {@link #shutdown()}.
+     * Shutdown is handled in {link #shutdown()}.
      */
     private final ExecutorService executor = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r, "tcp-sender");
         t.setDaemon(true);
         return t;
     });
-
-    // ── Configuration ─────────────────────────────────────────────────────────
-
-    public void setMyTcpPort(int port) {
-        this.myTcpPort = port;
-    }
 
     // ── Core send ─────────────────────────────────────────────────────────────
 
@@ -101,16 +93,14 @@ public class TCPClient {
         for (int attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
             if (trySend(peer, message)) return true;
             if (attempt < MAX_SEND_ATTEMPTS) {
-                LOG.fine("Retrying send to " + peer.getNodeId()
-                        + " (attempt " + (attempt + 1) + "/" + MAX_SEND_ATTEMPTS + ")");
+                LOG.log(java.util.logging.Level.FINE, "Retrying send to {0} (attempt {1}/{2})", new Object[]{peer.getNodeId(), attempt + 1, MAX_SEND_ATTEMPTS});
                 try { Thread.sleep(RETRY_DELAY_MS); } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                     return false;
                 }
             }
         }
-        LOG.warning("Failed to deliver " + message.getType()
-                + " to " + peer.getNodeId() + " after " + MAX_SEND_ATTEMPTS + " attempts.");
+        LOG.log(java.util.logging.Level.WARNING, "Failed to deliver {0} to {1} after {2} attempts.", new Object[]{message.getType(), peer.getNodeId(), MAX_SEND_ATTEMPTS});
         return false;
     }
 
@@ -118,8 +108,7 @@ public class TCPClient {
      * Makes a single send attempt. Returns {@code true} on success.
      */
     private boolean trySend(NodeInfo peer, Message message) {
-        LOG.info("<<< [TCP] Sending " + message.getType()
-                + " → " + peer.getNodeId() + " @ " + peer.getIpAddress() + ":" + peer.getTcpPort());
+        LOG.log(java.util.logging.Level.INFO, "<<< [TCP] Sending {0} → {1} @ {2}:{3}", new Object[]{message.getType(), peer.getNodeId(), peer.getIpAddress(), peer.getTcpPort()});
         try (Socket socket = openSocket(peer.getIpAddress(), peer.getTcpPort())) {
             // ObjectOutputStream flushes its 4-byte stream header immediately on
             // construction. The peer's MessageHandler will block in its OIS
@@ -134,7 +123,7 @@ public class TCPClient {
             }
             return true;
         } catch (Exception e) {
-            LOG.fine("Send attempt failed for " + peer.getNodeId() + ": " + e.getMessage());
+            LOG.log(java.util.logging.Level.FINE, "Send attempt failed for {0}: {1}", new Object[]{peer.getNodeId(), e.getMessage()});
             return false;
         }
     }
@@ -152,7 +141,7 @@ public class TCPClient {
             LOG.info("Broadcast skipped — no peers known yet.");
             return;
         }
-        LOG.info("Broadcasting " + message.getType() + " to " + peers.size() + " peer(s).");
+        LOG.log(java.util.logging.Level.INFO, "Broadcasting {0} to {1} peer(s).", new Object[]{message.getType(), peers.size()});
         for (NodeInfo peer : peers) {
             executor.submit(() -> send(peer, message));
         }
@@ -189,7 +178,7 @@ public class TCPClient {
      *         {@code null} if the sync failed
      */
     public Message requestSync(NodeInfo peer, String myNodeId, boolean isAdmin, int myTcpPort) {
-        LOG.info("<<< [TCP] Requesting SYNC from " + peer.getNodeId());
+        LOG.log(java.util.logging.Level.INFO, "<<< [TCP] Requesting SYNC from {0}", peer.getNodeId());
         try (Socket socket = openSocket(peer.getIpAddress(), peer.getTcpPort())) {
             socket.setSoTimeout(READ_TIMEOUT_MS);
 
@@ -204,15 +193,14 @@ public class TCPClient {
             try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
                 Object response = in.readObject();
                 if (response instanceof Message msg) {
-                    LOG.info("Received SYNC_RESPONSE from " + peer.getNodeId()
-                            + " — " + msg.getTicketList().size() + " ticket(s).");
+                    LOG.log(java.util.logging.Level.INFO, "Received SYNC_RESPONSE from {0} — {1} ticket(s).", new Object[]{peer.getNodeId(), msg.getTicketList().size()});
                     return msg;
                 }
-                LOG.warning("Unexpected response type from " + peer.getNodeId());
+                LOG.log(java.util.logging.Level.WARNING, "Unexpected response type from {0}", peer.getNodeId());
                 return null;
             }
         } catch (Exception e) {
-            LOG.warning("Sync request to " + peer.getNodeId() + " failed: " + e.getMessage());
+            LOG.log(java.util.logging.Level.WARNING, "Sync request to {0} failed: {1}", new Object[]{peer.getNodeId(), e.getMessage()});
             return null;
         }
     }
