@@ -25,14 +25,17 @@ public class MainController {
     @FXML
     private TextField registrationField;
 
-    @FXML
-    private TextField nameField;
-
     private ObservableList<String> ticketItems = FXCollections.observableArrayList();
 
     @FXML
     public void initialize() {
         ticketListView.setItems(ticketItems);
+    }
+
+    private QueueManager queueManager;
+
+    public void init(QueueManager queueManager) {
+        this.queueManager = queueManager;
         refreshTicketList();
     }
 
@@ -40,8 +43,8 @@ public class MainController {
     private void handleAddTicket() {
         String regNum = registrationField.getText().trim();
         String name = nameField.getText().trim();
-        if (!regNum.isEmpty() && !name.isEmpty()) {
-            Main.queueManager.addTicket(regNum, name);
+        if (!regNum.isEmpty() && !name.isEmpty() && queueManager != null) {
+            queueManager.addTicket(regNum, name);
             registrationField.clear();
             nameField.clear();
             refreshTicketList();
@@ -50,16 +53,20 @@ public class MainController {
 
     @FXML
     private void handleClearNext() {
-        Main.queueManager.clearNextTicket();
-        refreshTicketList();
+        if (queueManager != null) {
+            queueManager.clearNextTicket();
+            refreshTicketList();
+        }
     }
 
     private void refreshTicketList() {
         Platform.runLater(() -> {
             ticketItems.clear();
-            List<Ticket> tickets = Main.queueManager.getAllTickets();
-            for (Ticket ticket : tickets) {
-                ticketItems.add(ticket.toString());
+            if (queueManager != null) {
+                List<Ticket> tickets = queueManager.getAllTickets();
+                for (Ticket ticket : tickets) {
+                    ticketItems.add(ticket.toString());
+                }
             }
         });
     }
