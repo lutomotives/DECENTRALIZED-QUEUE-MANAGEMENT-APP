@@ -67,15 +67,21 @@ public class QueueManager {
         long now = System.currentTimeMillis();
         Ticket ticket = new Ticket(registrationNumber, studentName, now, nodeId);
 
-        queue.add(ticket);
-        db.insertTicket(ticket);
+        try {
+            queue.add(ticket);
+            db.insertTicket(ticket);
 
-        // Broadcast to all known peers
-        Message msg = Message.newTicket(nodeId, tcpPort, isAdmin, ticket);
-        client.broadcast(peers.values(), msg);
+            // Broadcast to all known peers
+            Message msg = Message.newTicket(nodeId, tcpPort, isAdmin, ticket);
+            client.broadcast(peers.values(), msg);
 
-        LOG.info("Created ticket: " + ticket);
-        notifyUIChanged();
+            LOG.log(java.util.logging.Level.INFO, "Created ticket: {0}", ticket);
+            notifyUIChanged();
+        } catch (Exception e) {
+            LOG.log(java.util.logging.Level.SEVERE, "Error creating ticket: {0}", e.getMessage());
+            queue.removeIf(t -> t.getTicketId().equals(ticket.getTicketId()));
+            throw e;
+        }
         return ticket;
     }
 
@@ -101,7 +107,7 @@ public class QueueManager {
         Message msg = Message.updateStatus(nodeId, tcpPort, isAdmin, ticketId, "CLEARED");
         client.broadcast(peers.values(), msg);
 
-        LOG.info("Cleared ticket: " + ticketId);
+        LOG.log(java.util.logging.Level.INFO, "Cleared ticket: {0}", ticketId);
         notifyUIChanged();
     }
 
@@ -112,12 +118,12 @@ public class QueueManager {
      */
     public synchronized void receiveTicket(Ticket ticket) {
         if (db.ticketExists(ticket.getTicketId())) {
-            LOG.fine("Duplicate ticket ignored: " + ticket.getTicketId());
+        LOG.log(java.util.logging.Level.FINE, "Duplicate ticket ignored: {0}", ticket.getTicketId());
             return;
         }
         queue.add(ticket);
         db.insertTicket(ticket);
-        LOG.info("Received ticket from peer: " + ticket);
+        LOG.log(java.util.logging.Level.INFO, "Received ticket from peer: {0}", ticket);
         notifyUIChanged();
     }
 
@@ -134,7 +140,7 @@ public class QueueManager {
           .findFirst()
           .ifPresent(queue::add);
 
-        LOG.info("Received status update: " + ticketId + " → " + newStatus);
+        LOG.log(java.util.logging.Level.INFO, "Received status update: {0} → {1}", new Object[]{ticketId, newStatus});
         notifyUIChanged();
     }
 
@@ -150,7 +156,7 @@ public class QueueManager {
             }
             queue.add(t);
         }
-        LOG.info("Applied sync response: " + tickets.size() + " tickets loaded");
+        LOG.log(java.util.logging.Level.INFO, "Applied sync response: {0} tickets loaded", tickets.size());
         notifyUIChanged();
     }
 
@@ -161,7 +167,7 @@ public class QueueManager {
     public synchronized void loadFromDatabase() {
         List<Ticket> saved = db.getAllTickets();
         queue.addAll(saved);
-        LOG.info("Loaded " + saved.size() + " tickets from local DB");
+        LOG.log(java.util.logging.Level.INFO, "Loaded {0} tickets from local DB", saved.size());
         notifyUIChanged();
     }
 

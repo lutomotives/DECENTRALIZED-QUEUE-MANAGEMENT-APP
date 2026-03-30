@@ -74,7 +74,7 @@ public class Main extends Application {
                 peer -> {
                     // Called when a NEW peer is discovered for the first time
                     LOG.log(java.util.logging.Level.INFO, "New peer found: {0} — sending SYNC_REQUEST", peer);
-                    Message response = client.requestSync(peer, nodeId, isAdmin, tcpPort);
+                    Message response = client.requestSync(peer, nodeId, isAdmin);
                     if (response != null && response.getTicketList() != null) {
                         queueManager.applySyncResponse(response.getTicketList());
                     }

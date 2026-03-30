@@ -393,7 +393,7 @@ public class UDPDiscoveryService implements Runnable {
             String targetIp = senderIp;
             if (senderIp.equals("0:0:0:0:0:0:0:1")) targetIp = "127.0.0.1";
 
-            NodeInfo peer = new NodeInfo(peerId, targetIp, peerPort, peerIsAdmin);
+            NodeInfo peer = new NodeInfo(peerId, targetIp, peerPort);
             peers.put(peerId, peer);
             LOG.info("Discovered new peer: " + peer);
             if (onPeerFound != null) onPeerFound.accept(peer);

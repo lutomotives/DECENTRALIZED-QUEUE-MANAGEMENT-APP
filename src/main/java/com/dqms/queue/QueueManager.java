@@ -48,7 +48,7 @@ public class QueueManager {
     public synchronized void registerPeer(String peerId, String ip, int port, boolean peerIsAdmin) {
         if (peerId.equals(nodeId)) return;
         if (!peers.containsKey(peerId)) {
-            NodeInfo peer = new NodeInfo(peerId, ip, port, peerIsAdmin);
+            NodeInfo peer = new NodeInfo(peerId, ip, port);
             peers.put(peerId, peer);
             LOG.info(">>> PEER CONNECTED: " + peerId);
         }

@@ -48,7 +48,7 @@ public class DatabaseManager {
         return DriverManager.getConnection("jdbc:sqlite:" + dbPath);
     }
 
-    public void saveTicket(Ticket ticket) {
+    public void insertTicket(Ticket ticket) {
         String sql = "INSERT OR REPLACE INTO tickets (ticket_id, registration_number, student_name, issue_time, origin_node_id, status) VALUES (?, ?, ?, ?, ?, ?)";
         try (Connection conn = getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -64,7 +64,7 @@ public class DatabaseManager {
         }
     }
 
-    public List<Ticket> loadAllTickets() {
+    public List<Ticket> getAllTickets() {
         List<Ticket> tickets = new ArrayList<>();
         String sql = "SELECT * FROM tickets ORDER BY issue_time";
         try (Connection conn = getConnection();
@@ -86,7 +86,7 @@ public class DatabaseManager {
         return tickets;
     }
 
-    public void updateTicketStatus(String ticketId, String newStatus) {
+    public void updateStatus(String ticketId, String newStatus) {
         String sql = "UPDATE tickets SET status = ? WHERE ticket_id = ?";
         try (Connection conn = getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -96,5 +96,21 @@ public class DatabaseManager {
         } catch (SQLException e) {
             LOG.severe("Failed to update ticket status: " + e.getMessage());
         }
+    }
+
+    public boolean ticketExists(String ticketId) {
+        String sql = "SELECT COUNT(*) FROM tickets WHERE ticket_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, ticketId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+        } catch (SQLException e) {
+            LOG.severe("Error checking ticket existence: " + e.getMessage());
+        }
+        return false;
     }
 }

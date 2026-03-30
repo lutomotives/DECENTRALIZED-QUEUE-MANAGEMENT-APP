@@ -12,7 +12,7 @@ public class NodeInfo implements Serializable {
     private final int tcpPort;
     private final boolean admin;
 
-    public NodeInfo(String nodeId, String ipAddress, int tcpPort, boolean admin) {
+    public NodeInfo(String nodeId, String ipAddress, int tcpPort) {
         this.nodeId = nodeId;
         this.ipAddress = ipAddress;
         this.tcpPort = tcpPort;
