@@ -1,8 +1,5 @@
 package com.dqms.network;
 
-import com.dqms.model.Message;
-import com.dqms.model.NodeInfo;
-
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
@@ -10,6 +7,9 @@ import java.util.Collection;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
+
+import com.dqms.model.Message;
+import com.dqms.model.NodeInfo;
 
 /**
  * Sends messages to peer nodes over TCP.
@@ -66,7 +66,7 @@ public class TCPClient {
             out.flush(); // Send header
             
             // WRITE THE REQUEST FIRST
-            out.writeObject(Message.syncRequest(myNodeId, isAdmin, myTcpPort));
+            out.writeObject(Message.syncRequest(myNodeId, myTcpPort, isAdmin));
             out.flush();
 
             // THEN open InputStream to wait for the response header

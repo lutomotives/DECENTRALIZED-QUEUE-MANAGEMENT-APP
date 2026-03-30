@@ -53,7 +53,7 @@ public class Main extends Application {
         tcpPort = params.size() > 0 ? Integer.parseInt(params.get(0)) : 5001;
         nodeId  = params.size() > 1 ? params.get(1) : "NODE_001";
 
-        LOG.info("=== Starting DQMS Node: " + nodeId + " on port " + tcpPort + " ===");
+        LOG.log(java.util.logging.Level.INFO, "=== Starting DQMS Node: {0} on port {1} ===", new Object[]{nodeId, tcpPort});
 
         // ── 1. Init core components ──────────────────────────────────────────
         DatabaseManager db     = new DatabaseManager(nodeId);
@@ -73,7 +73,7 @@ public class Main extends Application {
                 nodeId, tcpPort, isAdmin, peers,
                 peer -> {
                     // Called when a NEW peer is discovered for the first time
-                    LOG.info("New peer found: " + peer + " — sending SYNC_REQUEST");
+                    LOG.log(java.util.logging.Level.INFO, "New peer found: {0} — sending SYNC_REQUEST", peer);
                     Message response = client.requestSync(peer, nodeId, isAdmin, tcpPort);
                     if (response != null && response.getTicketList() != null) {
                         queueManager.applySyncResponse(response.getTicketList());
@@ -111,7 +111,7 @@ public class Main extends Application {
         stage.setScene(scene);
         stage.show();
 
-        LOG.info("UI launched for " + nodeId);
+        LOG.log(java.util.logging.Level.INFO, "UI launched for {0}", nodeId);
     }
 
     public static void main(String[] args) {

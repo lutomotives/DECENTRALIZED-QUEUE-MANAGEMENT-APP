@@ -48,7 +48,7 @@ public class Message implements Serializable {
         return m;
     }
 
-    public static Message syncRequest(String senderNodeId, boolean isAdmin, int tcpPort) {
+    public static Message syncRequest(String senderNodeId, int tcpPort, boolean isAdmin) {
         return new Message(Type.SYNC_REQUEST, senderNodeId, isAdmin, tcpPort);
     }
 
