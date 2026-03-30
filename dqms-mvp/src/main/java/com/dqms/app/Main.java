@@ -50,7 +50,7 @@ public class Main extends Application {
     public void start(Stage stage) throws Exception {
         // Parse args (JavaFX passes them via getParameters())
         var params = getParameters().getRaw();
-        tcpPort = params.size() > 0 ? Integer.parseInt(params.get(0)) : 5001;
+        tcpPort = !params.isEmpty() ? Integer.parseInt(params.get(0)) : 5001;
         nodeId  = params.size() > 1 ? params.get(1) : "NODE_001";
 
         LOG.log(java.util.logging.Level.INFO, "=== Starting DQMS Node: {0} on port {1} ===", new Object[]{nodeId, tcpPort});
@@ -74,12 +74,11 @@ public class Main extends Application {
                 peer -> {
                     // Called when a NEW peer is discovered for the first time
                     LOG.log(java.util.logging.Level.INFO, "New peer found: {0} — sending SYNC_REQUEST", peer);
-                    Message response = client.requestSync(peer, nodeId, isAdmin);
+                    Message response = client.requestSync(peer, nodeId, isAdmin, tcpPort);
                     if (response != null && response.getTicketList() != null) {
                         queueManager.applySyncResponse(response.getTicketList());
                     }
-                },
-                null  // onPeerLost callback (not used here)
+                }
         );
         Thread discoveryThread = new Thread(discovery, "udp-discovery");
         discoveryThread.setDaemon(true);
